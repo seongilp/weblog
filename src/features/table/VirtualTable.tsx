@@ -49,6 +49,17 @@ export function VirtualTable({
   const [focus, setFocus] = useState<Pos | null>(null);
   const [editing, setEditing] = useState<{ r: number; c: number } | null>(null);
   const dragging = useRef(false);
+  const wasEditing = useRef(false);
+
+  // When an edit ends, return focus to the grid so arrow keys work again.
+  useEffect(() => {
+    if (editing) {
+      wasEditing.current = true;
+    } else if (wasEditing.current) {
+      wasEditing.current = false;
+      scrollRef.current?.focus({ preventScroll: true });
+    }
+  }, [editing]);
 
   const virtualizer = useVirtualizer({
     count: total,

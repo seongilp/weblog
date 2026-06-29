@@ -212,7 +212,7 @@ function Ready({
           value="repl"
           className="m-0 min-h-0 flex-1 data-[state=inactive]:hidden"
         >
-          <Repl defaultTable={dataset.table} />
+          <Repl defaultTable={dataset.table} columns={dataset.columns} />
         </TabsContent>
       </Tabs>
     </div>

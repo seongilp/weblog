@@ -1,19 +1,22 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Play, Database, AlertCircle, Clock, Table2 } from "lucide-react";
+import type { SQLNamespace } from "@codemirror/lang-sql";
 import { runSql, listTables, type SqlResult } from "@/duckdb/db";
+import type { ColumnMeta } from "@/types";
+import { SqlEditor } from "./SqlEditor";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cellText } from "@/lib/format";
 import { formatCount, formatDuration } from "@/lib/utils";
-import { cn } from "@/lib/utils";
 
 const MAX_DISPLAY_ROWS = 2000;
 
 interface ReplProps {
   defaultTable?: string;
+  columns?: ColumnMeta[];
 }
 
-export function Repl({ defaultTable }: ReplProps) {
+export function Repl({ defaultTable, columns }: ReplProps) {
   const [sql, setSql] = useState(
     defaultTable
       ? `SELECT level, count(*) AS n\nFROM ${defaultTable}\nGROUP BY level\nORDER BY n DESC;`
@@ -23,11 +26,23 @@ export function Repl({ defaultTable }: ReplProps) {
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [tables, setTables] = useState<string[]>([]);
-  const taRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     listTables().then(setTables).catch(() => {});
   }, []);
+
+  // Schema for autocompletion: every table name, with columns for the active one.
+  const schema = useMemo<SQLNamespace>(() => {
+    const ns: Record<string, string[]> = {};
+    for (const tname of tables) {
+      ns[tname] =
+        tname === defaultTable ? (columns ?? []).map((c) => c.name) : [];
+    }
+    if (defaultTable && !ns[defaultTable]) {
+      ns[defaultTable] = (columns ?? []).map((c) => c.name);
+    }
+    return ns;
+  }, [tables, defaultTable, columns]);
 
   const run = useCallback(async () => {
     setRunning(true);
@@ -43,13 +58,6 @@ export function Repl({ defaultTable }: ReplProps) {
       setRunning(false);
     }
   }, [sql]);
-
-  function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      e.preventDefault();
-      void run();
-    }
-  }
 
   return (
     <div className="flex h-full gap-3">
@@ -77,26 +85,21 @@ export function Repl({ defaultTable }: ReplProps) {
 
       {/* Editor + results */}
       <div className="flex min-w-0 flex-1 flex-col gap-3">
-        <div className="relative">
-          <textarea
-            ref={taRef}
+        <div className="relative overflow-hidden rounded-lg border border-input bg-background/60 shadow-sm focus-within:ring-2 focus-within:ring-ring">
+          <SqlEditor
             value={sql}
-            onChange={(e) => setSql(e.target.value)}
-            onKeyDown={onKeyDown}
-            spellCheck={false}
-            className={cn(
-              "h-40 w-full resize-y rounded-lg border border-input bg-background/60 p-3 pr-28 font-mono text-[13px] leading-relaxed text-foreground shadow-sm",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            )}
-            placeholder="SELECT * FROM ..."
+            onChange={setSql}
+            onRun={run}
+            schema={schema}
+            defaultTable={defaultTable}
           />
-          <div className="absolute right-3 top-3 flex items-center gap-2">
+          <div className="absolute right-3 top-2.5 z-10 flex items-center gap-2">
             <Button size="sm" variant="primary" onClick={run} disabled={running}>
               <Play className="h-3.5 w-3.5" />
               {running ? "Running" : "Run"}
             </Button>
           </div>
-          <span className="absolute bottom-2 right-3 text-[10px] text-muted-foreground/50">
+          <span className="pointer-events-none absolute bottom-1.5 right-3 z-10 text-[10px] text-muted-foreground/50">
             ⌘/Ctrl + Enter
           </span>
         </div>
