@@ -19,8 +19,9 @@
   --popover: oklch(0.279 0.041 260.031);
   --popover-foreground: oklch(0.968 0.007 247.896);
 
-  --primary: oklch(0.704 0.04 256.788); /* slate-400 accent */
-  --primary-foreground: oklch(0.208 0.042 265.755);
+  --primary: oklch(0.62 0.19 256); /* Toss-like blue #3182F6 */
+  --primary-foreground: oklch(0.985 0.005 256); /* near-white */
+  --primary-soft: oklch(0.62 0.19 256 / 14%);
 
   --secondary: oklch(0.372 0.044 257.287); /* slate-700 */
   --secondary-foreground: oklch(0.968 0.007 247.896);
@@ -39,7 +40,7 @@
 
   --border: oklch(0.372 0.044 257.287 / 60%);
   --input: oklch(0.372 0.044 257.287);
-  --ring: oklch(0.554 0.046 257.417);
+  --ring: oklch(0.62 0.17 256); /* blue focus ring */
 }
 
 @theme inline {
@@ -92,6 +93,25 @@
     font-feature-settings: "rlig" 1, "calt" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+  /* Warm the cold slate up with a soft blue wash from the top. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(
+        70% 55% at 50% -8%,
+        oklch(0.62 0.19 256 / 0.16),
+        transparent 70%
+      ),
+      radial-gradient(
+        50% 40% at 100% 0%,
+        oklch(0.62 0.19 256 / 0.08),
+        transparent 60%
+      );
   }
   ::-webkit-scrollbar {
     width: 10px;

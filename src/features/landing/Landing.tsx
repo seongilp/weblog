@@ -127,14 +127,9 @@ const COPY = {
   },
 } satisfies Record<Lang, unknown>;
 
-function detectLang(): Lang {
-  if (typeof navigator !== "undefined" && navigator.language?.startsWith("ko"))
-    return "ko";
-  return "en";
-}
-
 export function Landing({ onLoadSample, onFile, busy }: LandingProps) {
-  const [lang, setLang] = useState<Lang>(detectLang);
+  // Korean is the default; visitors can switch to English with the toggle.
+  const [lang, setLang] = useState<Lang>("ko");
   const t = COPY[lang];
 
   return (
@@ -165,7 +160,7 @@ export function Landing({ onLoadSample, onFile, busy }: LandingProps) {
       <h1 className="text-center text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
         {t.title1}
         <br />
-        <span className="bg-gradient-to-r from-slate-200 to-slate-400 bg-clip-text text-transparent">
+        <span className="bg-gradient-to-r from-sky-300 via-blue-400 to-blue-500 bg-clip-text text-transparent">
           {t.title2}
         </span>
       </h1>
@@ -180,7 +175,7 @@ export function Landing({ onLoadSample, onFile, busy }: LandingProps) {
           variant="primary"
           onClick={onLoadSample}
           disabled={busy}
-          className="h-12 px-7 text-base shadow-lg shadow-black/30"
+          className="h-12 px-7 text-base shadow-lg shadow-primary/35"
         >
           <Zap className="h-5 w-5" />
           {t.cta}
