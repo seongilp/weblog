@@ -3,7 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import type { ColumnMeta, QuerySpec, SortSpec } from "@/types";
 import { useWindowedRows } from "@/hooks/useWindowedRows";
-import { updateCell } from "@/duckdb/db";
+import { updateCell, clearCells } from "@/duckdb/db";
 import {
   alignClass,
   cellText,
@@ -38,11 +38,8 @@ export function VirtualTable({
   onQueryMs,
 }: VirtualTableProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { getRow, ensureRange, invalidate, lastQueryMs } = useWindowedRows(
-    spec,
-    columns,
-    total,
-  );
+  const { getRow, ensureRange, invalidate, invalidateRange, lastQueryMs } =
+    useWindowedRows(spec, columns, total);
 
   // Selection: a rectangular range from `anchor` to `focus` (cell coords).
   const [anchor, setAnchor] = useState<Pos | null>(null);
@@ -179,6 +176,23 @@ export function VirtualTable({
     [editing, getRow, spec.table, columns, invalidate, moveFocus],
   );
 
+  const clearRange = useCallback(async () => {
+    if (!range) return;
+    try {
+      await clearCells(
+        spec,
+        columns,
+        range.r0,
+        range.r1,
+        range.c0,
+        range.c1,
+      );
+      invalidateRange(range.r0, range.r1);
+    } catch {
+      /* ignore — values stay as they were */
+    }
+  }, [range, spec, columns, invalidateRange]);
+
   const copySelection = useCallback(async () => {
     if (!range) return;
     const lines: string[] = [];
@@ -251,6 +265,13 @@ export function VirtualTable({
         if (meta) {
           e.preventDefault();
           void copySelection();
+        }
+        break;
+      case "Delete":
+      case "Backspace":
+        if (range) {
+          e.preventDefault();
+          void clearRange();
         }
         break;
       case "Escape":

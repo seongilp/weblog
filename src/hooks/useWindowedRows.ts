@@ -19,6 +19,8 @@ export interface WindowedRows {
   ensureRange: (start: number, end: number) => void;
   /** Drop the cached page holding this row and refetch it (after an edit). */
   invalidate: (rowIndex: number) => void;
+  /** Refetch every currently-cached page overlapping [start, end] (after a bulk edit). */
+  invalidateRange: (start: number, end: number) => void;
   lastQueryMs: number | null;
   cachedRows: number;
 }
@@ -116,6 +118,23 @@ export function useWindowedRows(
     [loadPage],
   );
 
+  const invalidateRange = useCallback(
+    (start: number, end: number) => {
+      const p0 = Math.floor(Math.max(0, start) / PAGE_SIZE);
+      const p1 = Math.floor(Math.max(0, end) / PAGE_SIZE);
+      for (let p = p0; p <= p1; p++) {
+        // Only touch pages we actually hold; uncached pages refetch on scroll.
+        if (!pages.current.has(p)) continue;
+        pages.current.delete(p);
+        const idx = lru.current.indexOf(p);
+        if (idx !== -1) lru.current.splice(idx, 1);
+        inflight.current.delete(p);
+        void loadPage(p);
+      }
+    },
+    [loadPage],
+  );
+
   const getRow = useCallback(
     (index: number): Row | undefined => {
       const page = Math.floor(index / PAGE_SIZE);
@@ -132,6 +151,7 @@ export function useWindowedRows(
     getRow,
     ensureRange,
     invalidate,
+    invalidateRange,
     lastQueryMs: state.lastQueryMs,
     cachedRows: pages.current.size * PAGE_SIZE,
   };

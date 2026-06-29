@@ -218,6 +218,42 @@ function cellLiteral(value: string, kind: ColumnMeta["kind"]): string {
   return `'${escaped}'`;
 }
 
+/**
+ * Clear (set NULL) a rectangular selection of cells in one statement.
+ * The row window respects the current sort/search so it matches what the user
+ * sees, and works regardless of which pages are cached on the client.
+ */
+export async function clearCells(
+  spec: QuerySpec,
+  columns: ColumnMeta[],
+  rowStart: number,
+  rowEnd: number,
+  colStart: number,
+  colEnd: number,
+): Promise<void> {
+  const db = await getDb();
+  const conn = await db.connect();
+  try {
+    const targetCols = columns.slice(colStart, colEnd + 1);
+    if (targetCols.length === 0) return;
+    const sets = targetCols
+      .map((c) => `${ident(c.name)} = NULL`)
+      .join(", ");
+    const where = buildWhere(spec, columns);
+    const order = buildOrder(spec);
+    const limit = rowEnd - rowStart + 1;
+    await conn.query(
+      `UPDATE ${ident(spec.table)} SET ${sets}
+       WHERE ${ident(ROW_ID)} IN (
+         SELECT ${ident(ROW_ID)} FROM ${ident(spec.table)} ${where} ${order}
+         LIMIT ${limit} OFFSET ${rowStart}
+       )`,
+    );
+  } finally {
+    await conn.close();
+  }
+}
+
 /** Edit a single cell in place, keyed by its stable __row_id. */
 export async function updateCell(
   table: string,
