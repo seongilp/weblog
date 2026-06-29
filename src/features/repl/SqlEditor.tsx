@@ -26,6 +26,8 @@ const slateTheme = EditorView.theme(
     "&.cm-focused": { outline: "none" },
     ".cm-content": {
       fontFamily: "var(--font-mono)",
+      // Bright default so untagged identifiers (table names, aliases) stay legible.
+      color: "#e2e8f0",
       caretColor: "var(--foreground)",
       padding: "10px 0",
     },
@@ -62,19 +64,40 @@ const slateTheme = EditorView.theme(
   { dark: true },
 );
 
+// NOTE: HighlightStyle colors must be literal hex/rgb — CSS var()/color-mix
+// do not resolve here (unlike EditorView.theme), so identifiers would fall
+// back to a dim default if we used them.
 const slateHighlight = HighlightStyle.define([
-  { tag: t.keyword, color: "#c4b5fd", fontWeight: "600" },
-  { tag: [t.string, t.special(t.string)], color: "#86efac" },
-  { tag: t.number, color: "#fca5a5" },
-  { tag: t.bool, color: "#fca5a5" },
-  { tag: t.null, color: "#fca5a5" },
-  { tag: t.comment, color: "var(--muted-foreground)", fontStyle: "italic" },
+  // Keywords: the theme's blue, the brightest accent in the editor.
   {
-    tag: [t.function(t.variableName), t.function(t.propertyName)],
-    color: "#7dd3fc",
+    tag: [t.keyword, t.modifier, t.operatorKeyword],
+    color: "#6aa1ff",
+    fontWeight: "600",
   },
-  { tag: t.operator, color: "var(--muted-foreground)" },
-  { tag: t.punctuation, color: "var(--muted-foreground)" },
+  // Identifiers (columns, tables, aliases): bright, easy to read.
+  {
+    tag: [t.name, t.variableName, t.propertyName, t.attributeName, t.labelName],
+    color: "#e2e8f0",
+  },
+  // Function names + types: sky.
+  {
+    tag: [
+      t.function(t.variableName),
+      t.function(t.propertyName),
+      t.standard(t.name),
+      t.typeName,
+    ],
+    color: "#38bdf8",
+  },
+  // Strings: calm teal.
+  { tag: [t.string, t.special(t.string)], color: "#5eead4" },
+  // Numbers / booleans / null: amber (not red — red reads as an error).
+  { tag: [t.number, t.bool, t.null], color: "#fbbf24" },
+  { tag: t.comment, color: "#64748b", fontStyle: "italic" },
+  {
+    tag: [t.operator, t.punctuation, t.separator, t.bracket, t.derefOperator],
+    color: "#94a3b8",
+  },
 ]);
 
 export function SqlEditor({
@@ -116,6 +139,7 @@ export function SqlEditor({
       value={value}
       onChange={onChange}
       extensions={extensions}
+      theme="none"
       height="160px"
       basicSetup={{
         lineNumbers: true,
