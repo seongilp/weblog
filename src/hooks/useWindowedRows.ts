@@ -17,6 +17,8 @@ interface WindowState {
 export interface WindowedRows {
   getRow: (index: number) => Row | undefined;
   ensureRange: (start: number, end: number) => void;
+  /** Drop the cached page holding this row and refetch it (after an edit). */
+  invalidate: (rowIndex: number) => void;
   lastQueryMs: number | null;
   cachedRows: number;
 }
@@ -102,6 +104,18 @@ export function useWindowedRows(
     [loadPage, touch, total],
   );
 
+  const invalidate = useCallback(
+    (rowIndex: number) => {
+      const page = Math.floor(rowIndex / PAGE_SIZE);
+      pages.current.delete(page);
+      const idx = lru.current.indexOf(page);
+      if (idx !== -1) lru.current.splice(idx, 1);
+      inflight.current.delete(page);
+      void loadPage(page);
+    },
+    [loadPage],
+  );
+
   const getRow = useCallback(
     (index: number): Row | undefined => {
       const page = Math.floor(index / PAGE_SIZE);
@@ -117,6 +131,7 @@ export function useWindowedRows(
   return {
     getRow,
     ensureRange,
+    invalidate,
     lastQueryMs: state.lastQueryMs,
     cachedRows: pages.current.size * PAGE_SIZE,
   };

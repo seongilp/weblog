@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Layers,
   Table2,
@@ -6,12 +6,17 @@ import {
   Plus,
   Loader2,
   FileWarning,
+  FolderOpen,
+  Zap,
+  UploadCloud,
+  Command as CommandIcon,
 } from "lucide-react";
 import { useIngest } from "@/hooks/useIngest";
+import { useGlobalDrop } from "@/hooks/useGlobalDrop";
 import { Landing } from "@/features/landing/Landing";
 import { Workspace } from "@/features/table/Workspace";
 import { Repl } from "@/features/repl/Repl";
-import { FileDropzone } from "@/features/ingest/FileDropzone";
+import { CommandPalette, type Command } from "@/features/command/CommandPalette";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
@@ -19,42 +24,107 @@ import { Badge } from "@/components/ui/badge";
 import { formatBytes, formatCount, formatDuration } from "@/lib/utils";
 
 const SAMPLE_SIZE = 1_000_000;
+const ACCEPT = ".csv,.tsv,.xlsx,.xls,.log,.txt,.json,.ndjson";
 
 export default function App() {
   const ingest = useIngest();
   const { status, dataset, progress, error } = ingest;
+  const [tab, setTab] = useState("table");
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  if (status !== "ready" || !dataset) {
-    return (
-      <TooltipProvider delayDuration={200}>
+  const busy = status === "busy";
+  const isDragging = useGlobalDrop(ingest.loadFile, !busy);
+
+  // Global Cmd/Ctrl+K opens the command palette.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const openFile = () => fileInputRef.current?.click();
+
+  const commands: Command[] = [
+    {
+      id: "sample",
+      label: "Load 1,000,000 sample logs",
+      hint: "demo",
+      icon: Zap,
+      run: () => ingest.loadSample(SAMPLE_SIZE),
+    },
+    { id: "open", label: "Open a file…", icon: FolderOpen, run: openFile },
+    {
+      id: "table",
+      label: "Switch to Table view",
+      icon: Table2,
+      run: () => setTab("table"),
+      disabled: !dataset,
+    },
+    {
+      id: "sql",
+      label: "Switch to SQL REPL",
+      icon: Terminal,
+      run: () => setTab("repl"),
+      disabled: !dataset,
+    },
+    {
+      id: "new",
+      label: "Close dataset / start over",
+      icon: Plus,
+      run: ingest.reset,
+      disabled: !dataset,
+    },
+  ];
+
+  return (
+    <TooltipProvider delayDuration={200}>
+      {/* hidden input powering the "Open a file" command */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={ACCEPT}
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) ingest.loadFile(f);
+          e.target.value = "";
+        }}
+      />
+
+      {status !== "ready" || !dataset ? (
         <div className="relative min-h-full">
           <Landing
             onLoadSample={() => ingest.loadSample(SAMPLE_SIZE)}
             onFile={ingest.loadFile}
-            busy={status === "busy"}
+            busy={busy}
           />
-          {status === "busy" && progress && (
-            <LoadingOverlay phase={progress.phase} ratio={progress.ratio} />
-          )}
-          {status === "error" && error && (
-            <div className="fixed bottom-6 left-1/2 z-50 flex max-w-lg -translate-x-1/2 items-start gap-2 rounded-lg border border-destructive/50 bg-card px-4 py-3 text-sm text-destructive-foreground shadow-xl">
-              <FileWarning className="mt-0.5 h-4 w-4 shrink-0" />
-              <div>
-                <p className="font-medium">Could not load that file</p>
-                <p className="mt-0.5 font-mono text-xs text-muted-foreground">
-                  {error}
-                </p>
-              </div>
-            </div>
-          )}
+          {status === "error" && error && <ErrorToast error={error} />}
         </div>
-      </TooltipProvider>
-    );
-  }
+      ) : (
+        <Ready
+          ingest={ingest}
+          dataset={dataset}
+          tab={tab}
+          setTab={setTab}
+          onOpenPalette={() => setPaletteOpen(true)}
+        />
+      )}
 
-  return (
-    <TooltipProvider delayDuration={200}>
-      <Ready ingest={ingest} dataset={dataset} />
+      {busy && progress && (
+        <LoadingOverlay phase={progress.phase} ratio={progress.ratio} />
+      )}
+      {isDragging && <DropOverlay />}
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        commands={commands}
+      />
     </TooltipProvider>
   );
 }
@@ -62,12 +132,16 @@ export default function App() {
 function Ready({
   ingest,
   dataset,
+  tab,
+  setTab,
+  onOpenPalette,
 }: {
   ingest: ReturnType<typeof useIngest>;
   dataset: NonNullable<ReturnType<typeof useIngest>["dataset"]>;
+  tab: string;
+  setTab: (t: string) => void;
+  onOpenPalette: () => void;
 }) {
-  const [tab, setTab] = useState("table");
-
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
@@ -98,6 +172,14 @@ function Ready({
           <Badge variant="outline" title="Parse + load time">
             ingest {formatDuration(dataset.ingestMs)}
           </Badge>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onOpenPalette}
+            title="Command palette (⌘/Ctrl + K)"
+          >
+            <CommandIcon className="h-3.5 w-3.5" /> K
+          </Button>
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList>
               <TabsTrigger value="table">
@@ -133,10 +215,33 @@ function Ready({
           <Repl defaultTable={dataset.table} />
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
 
-      {/* Persistent dropzone to swap in another file */}
-      <div className="shrink-0 border-t border-border px-4 py-2">
-        <FileDropzone onFile={ingest.loadFile} compact />
+function ErrorToast({ error }: { error: string }) {
+  return (
+    <div className="fixed bottom-6 left-1/2 z-50 flex max-w-lg -translate-x-1/2 items-start gap-2 rounded-lg border border-destructive/50 bg-card px-4 py-3 text-sm text-destructive-foreground shadow-xl">
+      <FileWarning className="mt-0.5 h-4 w-4 shrink-0" />
+      <div>
+        <p className="font-medium">Could not load that file</p>
+        <p className="mt-0.5 font-mono text-xs text-muted-foreground">{error}</p>
+      </div>
+    </div>
+  );
+}
+
+function DropOverlay() {
+  return (
+    <div className="pointer-events-none fixed inset-0 z-[55] flex items-center justify-center bg-primary/10 backdrop-blur-sm">
+      <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-primary bg-card/90 px-12 py-10 shadow-2xl">
+        <UploadCloud className="h-10 w-10 text-primary" />
+        <p className="text-base font-semibold text-foreground">
+          Drop to open anywhere
+        </p>
+        <p className="text-xs text-muted-foreground">
+          CSV · TSV · XLSX · LOG · JSON
+        </p>
       </div>
     </div>
   );

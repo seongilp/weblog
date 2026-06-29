@@ -5,6 +5,8 @@ import path from "node:path";
 
 // https://vite.dev/config/
 export default defineConfig({
+  // GitHub Pages serves this project under /weblog/.
+  base: "/weblog/",
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
@@ -17,12 +19,5 @@ export default defineConfig({
   optimizeDeps: {
     // duckdb-wasm ships its own workers; let Vite leave them alone.
     exclude: ["@duckdb/duckdb-wasm"],
-  },
-  server: {
-    headers: {
-      // Enables SharedArrayBuffer so duckdb-wasm can use its threaded build.
-      "Cross-Origin-Opener-Policy": "same-origin",
-      "Cross-Origin-Embedder-Policy": "require-corp",
-    },
   },
 });

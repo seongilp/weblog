@@ -8,9 +8,17 @@ interface FileDropzoneProps {
   onFile: (file: File) => void;
   compact?: boolean;
   disabled?: boolean;
+  mainText?: string;
+  hintText?: string;
 }
 
-export function FileDropzone({ onFile, compact, disabled }: FileDropzoneProps) {
+export function FileDropzone({
+  onFile,
+  compact,
+  disabled,
+  mainText = "Drop a file or click to browse",
+  hintText = "CSV · TSV · XLSX · LOG · JSON — parsed locally, never uploaded",
+}: FileDropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -54,15 +62,11 @@ export function FileDropzone({ onFile, compact, disabled }: FileDropzoneProps) {
         className={cn("text-muted-foreground", compact ? "h-5 w-5" : "h-9 w-9")}
       />
       {compact ? (
-        <span className="text-xs text-muted-foreground">Drop a file</span>
+        <span className="text-xs text-muted-foreground">{mainText}</span>
       ) : (
         <>
-          <p className="text-sm font-medium text-foreground">
-            Drop a file or click to browse
-          </p>
-          <p className="text-xs text-muted-foreground">
-            CSV · TSV · XLSX · LOG · JSON — parsed locally, never uploaded
-          </p>
+          <p className="text-sm font-medium text-foreground">{mainText}</p>
+          <p className="text-xs text-muted-foreground">{hintText}</p>
         </>
       )}
     </div>

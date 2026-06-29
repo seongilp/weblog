@@ -1,8 +1,4 @@
 import * as duckdb from "@duckdb/duckdb-wasm";
-import duckdb_wasm from "@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url";
-import mvp_worker from "@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url";
-import duckdb_wasm_eh from "@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url";
-import eh_worker from "@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url";
 import type {
   ColumnMeta,
   DatasetMeta,
@@ -11,10 +7,9 @@ import type {
   SourceKind,
 } from "@/types";
 
-const MANUAL_BUNDLES: duckdb.DuckDBBundles = {
-  mvp: { mainModule: duckdb_wasm, mainWorker: mvp_worker },
-  eh: { mainModule: duckdb_wasm_eh, mainWorker: eh_worker },
-};
+/* The DuckDB wasm bundles (35–41 MiB) are served from the jsDelivr CDN rather
+ * than bundled, so the static deploy stays tiny and well under host file-size
+ * limits. The data you load still never leaves the browser. */
 
 /** Columns prefixed with __ are internal (ordering helpers) and hidden. */
 const INTERNAL_PREFIX = "__";
@@ -25,11 +20,20 @@ let dbPromise: Promise<duckdb.AsyncDuckDB> | null = null;
 async function getDb(): Promise<duckdb.AsyncDuckDB> {
   if (!dbPromise) {
     dbPromise = (async () => {
-      const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
-      const worker = new Worker(bundle.mainWorker!, { type: "module" });
+      const bundles = duckdb.getJsDelivrBundles();
+      const bundle = await duckdb.selectBundle(bundles);
+      // Wrap the cross-origin CDN worker in a same-origin blob so the Worker
+      // constructor accepts it (importScripts can pull cross-origin scripts).
+      const workerUrl = URL.createObjectURL(
+        new Blob([`importScripts("${bundle.mainWorker}");`], {
+          type: "text/javascript",
+        }),
+      );
+      const worker = new Worker(workerUrl);
       const logger = new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING);
       const db = new duckdb.AsyncDuckDB(logger, worker);
       await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+      URL.revokeObjectURL(workerUrl);
       // Best-effort OPFS persistence; falls back to in-memory if unavailable.
       try {
         await db.open({
@@ -166,7 +170,11 @@ export async function countMatching(
   }
 }
 
-/** Fetch a sorted/filtered window — only what the viewport needs. */
+/**
+ * Fetch a sorted/filtered window — only what the viewport needs.
+ * Each returned row is `[__row_id, ...cellValues]`; the leading row id is the
+ * stable key used for in-place cell edits.
+ */
 export async function fetchWindow(
   spec: QuerySpec,
   columns: ColumnMeta[],
@@ -181,10 +189,51 @@ export async function fetchWindow(
     const where = buildWhere(spec, columns);
     const order = buildOrder(spec);
     const res = await conn.query(
-      `SELECT ${cols} FROM ${ident(spec.table)} ${where} ${order}
+      `SELECT ${ident(ROW_ID)}, ${cols} FROM ${ident(spec.table)} ${where} ${order}
        LIMIT ${limit} OFFSET ${offset}`,
     );
-    return { rows: arrowToRows(res, columns.length), elapsedMs: performance.now() - started };
+    return {
+      rows: arrowToRows(res, columns.length + 1),
+      elapsedMs: performance.now() - started,
+    };
+  } finally {
+    await conn.close();
+  }
+}
+
+/** SQL literal for a cell value, typed by the column's coarse kind. */
+function cellLiteral(value: string, kind: ColumnMeta["kind"]): string {
+  const v = value.trim();
+  if (v === "") return "NULL";
+  if (kind === "number") {
+    return Number.isFinite(Number(v)) ? v : "NULL";
+  }
+  if (kind === "boolean") {
+    if (/^(true|1|t|yes)$/i.test(v)) return "TRUE";
+    if (/^(false|0|f|no)$/i.test(v)) return "FALSE";
+    return "NULL";
+  }
+  const escaped = v.replace(/'/g, "''");
+  if (kind === "time") return `TIMESTAMP '${escaped}'`;
+  return `'${escaped}'`;
+}
+
+/** Edit a single cell in place, keyed by its stable __row_id. */
+export async function updateCell(
+  table: string,
+  rowId: number | bigint,
+  column: ColumnMeta,
+  value: string,
+): Promise<void> {
+  const db = await getDb();
+  const conn = await db.connect();
+  try {
+    await conn.query(
+      `UPDATE ${ident(table)} SET ${ident(column.name)} = ${cellLiteral(
+        value,
+        column.kind,
+      )} WHERE ${ident(ROW_ID)} = ${rowId}`,
+    );
   } finally {
     await conn.close();
   }
