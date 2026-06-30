@@ -8,6 +8,7 @@ import {
   FileSpreadsheet,
   ScrollText,
   Braces,
+  BarChart3,
   Languages,
 } from "lucide-react";
 import { FileDropzone } from "@/features/ingest/FileDropzone";
@@ -18,6 +19,7 @@ type Lang = "ko" | "en";
 
 interface LandingProps {
   onLoadSample: () => void;
+  onLoadDataset: () => void;
   onFile: (file: File) => void;
   busy: boolean;
 }
@@ -45,7 +47,9 @@ const COPY = {
       { icon: Braces, label: "JSON / NDJSON", desc: "줄 단위 레코드" },
     ],
     cta: "로그 1,000,000건 불러오기",
-    ctaSub: "합성 로그 100만 줄을 만들어 바로 도구에 띄웁니다 — 파일 필요 없음.",
+    datasetCta: "예제 데이터셋 (Summary 데모)",
+    ctaSub:
+      "버튼으로 바로 체험 — 합성 로그 100만 줄, 또는 컬럼이 다양한 주문 데이터 2만 건(Summary 보기에 적합).",
     features: [
       {
         icon: Database,
@@ -95,8 +99,9 @@ const COPY = {
       { icon: Braces, label: "JSON / NDJSON", desc: "Line-delimited records" },
     ],
     cta: "Load 1,000,000 sample logs",
+    datasetCta: "Example dataset (Summary demo)",
     ctaSub:
-      "Generates a million synthetic log rows and opens them in the tool — no file needed.",
+      "Try it instantly — a million synthetic log rows, or a 20k-row orders dataset with varied columns (great for the Summary view).",
     features: [
       {
         icon: Database,
@@ -126,7 +131,12 @@ const COPY = {
   },
 } satisfies Record<Lang, unknown>;
 
-export function Landing({ onLoadSample, onFile, busy }: LandingProps) {
+export function Landing({
+  onLoadSample,
+  onLoadDataset,
+  onFile,
+  busy,
+}: LandingProps) {
   // Korean is the default; visitors can switch to English with the toggle.
   const [lang, setLang] = useState<Lang>("ko");
   const t = COPY[lang];
@@ -178,18 +188,31 @@ export function Landing({ onLoadSample, onFile, busy }: LandingProps) {
         />
       </div>
 
-      {/* Secondary: small demo button */}
-      <div className="mt-5 flex flex-col items-center gap-1.5">
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={onLoadSample}
-          disabled={busy}
-        >
-          <Zap className="h-3.5 w-3.5 text-primary" />
-          {t.cta}
-        </Button>
-        <p className="text-[11px] text-muted-foreground/60">{t.ctaSub}</p>
+      {/* Secondary: small demo buttons */}
+      <div className="mt-5 flex flex-col items-center gap-2">
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onLoadSample}
+            disabled={busy}
+          >
+            <Zap className="h-3.5 w-3.5 text-primary" />
+            {t.cta}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onLoadDataset}
+            disabled={busy}
+          >
+            <BarChart3 className="h-3.5 w-3.5 text-primary" />
+            {t.datasetCta}
+          </Button>
+        </div>
+        <p className="max-w-md text-center text-[11px] text-muted-foreground/60">
+          {t.ctaSub}
+        </p>
       </div>
 
       {/* Formats — emphasized: logs, Excel, CSV, anything tabular */}

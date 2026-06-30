@@ -52,6 +52,19 @@ export default function App() {
 
   const openFile = () => fileInputRef.current?.click();
 
+  // Fetch the bundled varied dataset and run it through the normal ingest path.
+  const loadExample = async () => {
+    try {
+      const res = await fetch(`${import.meta.env.BASE_URL}sample-orders.csv`);
+      const blob = await res.blob();
+      ingest.loadFile(
+        new File([blob], "sample-orders.csv", { type: "text/csv" }),
+      );
+    } catch {
+      /* ignore network errors */
+    }
+  };
+
   const commands: Command[] = [
     {
       id: "sample",
@@ -61,6 +74,13 @@ export default function App() {
       run: () => ingest.loadSample(SAMPLE_SIZE),
     },
     { id: "open", label: "Open a file…", icon: FolderOpen, run: openFile },
+    {
+      id: "example",
+      label: "Load example dataset (orders)",
+      hint: "summary",
+      icon: BarChart3,
+      run: loadExample,
+    },
     {
       id: "table",
       label: "Switch to Table view",
@@ -110,6 +130,7 @@ export default function App() {
         <div className="relative min-h-full">
           <Landing
             onLoadSample={() => ingest.loadSample(SAMPLE_SIZE)}
+            onLoadDataset={loadExample}
             onFile={ingest.loadFile}
             busy={busy}
           />
