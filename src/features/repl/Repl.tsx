@@ -16,12 +16,22 @@ interface ReplProps {
   columns?: ColumnMeta[];
 }
 
-export function Repl({ defaultTable, columns }: ReplProps) {
-  const [sql, setSql] = useState(
-    defaultTable
-      ? `SELECT level, count(*) AS n\nFROM ${defaultTable}\nGROUP BY level\nORDER BY n DESC;`
-      : "SELECT 42 AS answer;",
+/** A sensible starter query built from the dataset's actual columns. */
+function starterSql(table?: string, columns?: ColumnMeta[]): string {
+  if (!table) return "SELECT 42 AS answer;";
+  const q = (n: string) => `"${n.replace(/"/g, '""')}"`;
+  // Prefer a low-ish-cardinality categorical column for a GROUP BY demo.
+  const groupCol = columns?.find(
+    (c) => c.kind === "string" || c.kind === "boolean",
   );
+  if (groupCol) {
+    return `SELECT ${q(groupCol.name)}, count(*) AS n\nFROM ${table}\nGROUP BY 1\nORDER BY n DESC;`;
+  }
+  return `SELECT *\nFROM ${table}\nLIMIT 100;`;
+}
+
+export function Repl({ defaultTable, columns }: ReplProps) {
+  const [sql, setSql] = useState(() => starterSql(defaultTable, columns));
   const [result, setResult] = useState<SqlResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
