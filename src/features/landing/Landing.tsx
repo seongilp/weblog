@@ -8,7 +8,6 @@ import {
   FileSpreadsheet,
   ScrollText,
   Braces,
-  ArrowRight,
   Languages,
 } from "lucide-react";
 import { FileDropzone } from "@/features/ingest/FileDropzone";
@@ -168,20 +167,29 @@ export function Landing({ onLoadSample, onFile, busy }: LandingProps) {
         {t.lead}
       </p>
 
-      {/* Primary CTA */}
-      <div className="mt-9 flex flex-col items-center gap-3">
+      {/* Primary action: drop a file (large target) */}
+      <div className="mt-9 w-full max-w-2xl">
+        <FileDropzone
+          onFile={onFile}
+          disabled={busy}
+          size="large"
+          mainText={t.dropMain}
+          hintText={t.dropHint}
+        />
+      </div>
+
+      {/* Secondary: small demo button */}
+      <div className="mt-5 flex flex-col items-center gap-1.5">
         <Button
-          size="lg"
-          variant="primary"
+          size="sm"
+          variant="outline"
           onClick={onLoadSample}
           disabled={busy}
-          className="h-12 px-7 text-base shadow-lg shadow-primary/35"
         >
-          <Zap className="h-5 w-5" />
+          <Zap className="h-3.5 w-3.5 text-primary" />
           {t.cta}
-          <ArrowRight className="h-4 w-4" />
         </Button>
-        <p className="text-xs text-muted-foreground/70">{t.ctaSub}</p>
+        <p className="text-[11px] text-muted-foreground/60">{t.ctaSub}</p>
       </div>
 
       {/* Formats — emphasized: logs, Excel, CSV, anything tabular */}
@@ -207,15 +215,6 @@ export function Landing({ onLoadSample, onFile, busy }: LandingProps) {
         </div>
       </div>
 
-      {/* Dropzone */}
-      <div className="mt-10 w-full max-w-xl">
-        <FileDropzone
-          onFile={onFile}
-          disabled={busy}
-          mainText={t.dropMain}
-          hintText={t.dropHint}
-        />
-      </div>
 
       {/* Feature grid */}
       <div className="mt-16 grid w-full gap-4 sm:grid-cols-2 lg:grid-cols-4">
