@@ -9,12 +9,14 @@ import {
   FolderOpen,
   Zap,
   UploadCloud,
+  BarChart3,
   Command as CommandIcon,
 } from "lucide-react";
 import { useIngest } from "@/hooks/useIngest";
 import { useGlobalDrop } from "@/hooks/useGlobalDrop";
 import { Landing } from "@/features/landing/Landing";
 import { Workspace } from "@/features/table/Workspace";
+import { Summary } from "@/features/summary/Summary";
 import { Repl } from "@/features/repl/Repl";
 import { CommandPalette, type Command } from "@/features/command/CommandPalette";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -64,6 +66,13 @@ export default function App() {
       label: "Switch to Table view",
       icon: Table2,
       run: () => setTab("table"),
+      disabled: !dataset,
+    },
+    {
+      id: "summary",
+      label: "Switch to Summary",
+      icon: BarChart3,
+      run: () => setTab("summary"),
       disabled: !dataset,
     },
     {
@@ -185,6 +194,9 @@ function Ready({
               <TabsTrigger value="table">
                 <Table2 className="h-3.5 w-3.5" /> Table
               </TabsTrigger>
+              <TabsTrigger value="summary">
+                <BarChart3 className="h-3.5 w-3.5" /> Summary
+              </TabsTrigger>
               <TabsTrigger value="repl">
                 <Terminal className="h-3.5 w-3.5" /> SQL
               </TabsTrigger>
@@ -207,6 +219,12 @@ function Ready({
           className="m-0 min-h-0 flex-1 data-[state=inactive]:hidden"
         >
           <Workspace dataset={dataset} />
+        </TabsContent>
+        <TabsContent
+          value="summary"
+          className="m-0 min-h-0 flex-1 data-[state=inactive]:hidden"
+        >
+          <Summary dataset={dataset} />
         </TabsContent>
         <TabsContent
           value="repl"

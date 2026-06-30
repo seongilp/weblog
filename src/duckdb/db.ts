@@ -302,6 +302,92 @@ export async function runSql(sql: string): Promise<SqlResult> {
   }
 }
 
+export interface ColumnSummary {
+  name: string;
+  type: string;
+  min: string | null;
+  max: string | null;
+  approxUnique: number | null;
+  avg: string | null;
+  std: string | null;
+  q25: string | null;
+  q50: string | null;
+  q75: string | null;
+  count: number;
+  nullPercentage: number;
+}
+
+const str = (v: unknown): string | null =>
+  v === null || v === undefined ? null : String(v);
+const num = (v: unknown): number | null =>
+  v === null || v === undefined ? null : Number(v);
+
+/** DuckDB SUMMARIZE: per-column stats (min/max/avg/quantiles/unique/null%). */
+export async function summarize(
+  table: string,
+): Promise<{ rows: ColumnSummary[]; elapsedMs: number }> {
+  const db = await getDb();
+  const conn = await db.connect();
+  const started = performance.now();
+  try {
+    const res = await conn.query(`SUMMARIZE ${ident(table)}`);
+    const rows = res
+      .toArray()
+      .map((r): ColumnSummary => {
+        const o = r as Record<string, unknown>;
+        return {
+          name: String(o.column_name),
+          type: String(o.column_type),
+          min: str(o.min),
+          max: str(o.max),
+          approxUnique: num(o.approx_unique),
+          avg: str(o.avg),
+          std: str(o.std),
+          q25: str(o.q25),
+          q50: str(o.q50),
+          q75: str(o.q75),
+          count: num(o.count) ?? 0,
+          nullPercentage: num(o.null_percentage) ?? 0,
+        };
+      })
+      // Hide the internal ordering column.
+      .filter((s) => !s.name.startsWith(INTERNAL_PREFIX));
+    return { rows, elapsedMs: performance.now() - started };
+  } finally {
+    await conn.close();
+  }
+}
+
+export interface ValueCount {
+  value: string;
+  count: number;
+}
+
+/** Most frequent values of a column — for categorical distribution bars. */
+export async function topValues(
+  table: string,
+  column: string,
+  limit = 8,
+): Promise<ValueCount[]> {
+  const db = await getDb();
+  const conn = await db.connect();
+  try {
+    const res = await conn.query(
+      `SELECT ${ident(column)} AS v, count(*)::BIGINT AS n
+       FROM ${ident(table)} GROUP BY 1 ORDER BY n DESC NULLS LAST LIMIT ${limit}`,
+    );
+    return res.toArray().map((r) => {
+      const o = r as Record<string, unknown>;
+      return {
+        value: o.v === null || o.v === undefined ? "∅ null" : String(o.v),
+        count: Number(o.n),
+      };
+    });
+  } finally {
+    await conn.close();
+  }
+}
+
 /** List user tables for the REPL schema panel. */
 export async function listTables(): Promise<string[]> {
   const db = await getDb();
