@@ -130,17 +130,98 @@ export async function ingest(input: IngestInput): Promise<DatasetMeta> {
   }
 }
 
+/** ILIKE literal for an exact (case-insensitive) match — no surrounding %. */
+function ilikeExact(term: string): string {
+  const escaped = term.replace(/'/g, "''").replace(/([%_\\])/g, "\\$1");
+  return `'${escaped}'`;
+}
+
+interface Condition {
+  column: ColumnMeta;
+  op: string;
+  value: string;
+}
+
+/**
+ * Parse the search box into structured column conditions + leftover free text.
+ * Supports `col=v`, `col!=v`, `col>v`, `col<v`, `col>=v`, `col<=v`,
+ * and `col:v` / `col~v` (contains). Quoted values may contain spaces.
+ */
+function parseSearch(
+  search: string,
+  columns: ColumnMeta[],
+): { conditions: Condition[]; free: string } {
+  const byName = new Map(columns.map((c) => [c.name.toLowerCase(), c]));
+  const re = /([A-Za-z_][\w]*)\s*(>=|<=|!=|=|>|<|~|:)\s*("[^"]*"|'[^']*'|\S+)/g;
+  const conditions: Condition[] = [];
+  let free = search;
+  for (const m of search.matchAll(re)) {
+    const column = byName.get(m[1].toLowerCase());
+    if (!column) continue; // not a real column → leave it in the free text
+    let value = m[3];
+    if (/^".*"$|^'.*'$/.test(value)) value = value.slice(1, -1);
+    conditions.push({ column, op: m[2], value });
+    free = free.replace(m[0], " ");
+  }
+  return { conditions, free: free.trim() };
+}
+
+/** SQL literal for a condition value, typed by the column kind. */
+function condLiteral(c: Condition): string | null {
+  const v = c.value.trim();
+  if (c.column.kind === "number") {
+    return Number.isFinite(Number(v)) ? v : null;
+  }
+  if (c.column.kind === "boolean") {
+    if (/^(true|1|t|yes)$/i.test(v)) return "TRUE";
+    if (/^(false|0|f|no)$/i.test(v)) return "FALSE";
+    return null;
+  }
+  // string / time: quote; DuckDB casts the literal for date/timestamp compares.
+  return `'${v.replace(/'/g, "''")}'`;
+}
+
+function conditionSql(c: Condition): string | null {
+  const col = ident(c.column.name);
+  if (c.op === ":" || c.op === "~") {
+    return `CAST(${col} AS VARCHAR) ILIKE ${likeLiteral(c.value)} ESCAPE '\\'`;
+  }
+  const isText = c.column.kind === "string";
+  if (c.op === "=") {
+    if (isText) return `${col} ILIKE ${ilikeExact(c.value)} ESCAPE '\\'`;
+    const lit = condLiteral(c);
+    return lit === null ? null : `${col} = ${lit}`;
+  }
+  if (c.op === "!=") {
+    if (isText) return `${col} NOT ILIKE ${ilikeExact(c.value)} ESCAPE '\\'`;
+    const lit = condLiteral(c);
+    return lit === null ? null : `${col} <> ${lit}`;
+  }
+  // >, <, >=, <=
+  const lit = condLiteral(c);
+  return lit === null ? null : `${col} ${c.op} ${lit}`;
+}
+
 function buildWhere(spec: QuerySpec, columns: ColumnMeta[]): string {
   const term = spec.search.trim();
   if (!term) return "";
-  // Search every visible column as text. ILIKE = case-insensitive.
-  const clauses = columns
-    .map(
-      (c) =>
-        `CAST(${ident(c.name)} AS VARCHAR) ILIKE ${likeLiteral(term)} ESCAPE '\\'`,
-    )
-    .join(" OR ");
-  return clauses ? `WHERE (${clauses})` : "";
+  const { conditions, free } = parseSearch(term, columns);
+  const parts: string[] = [];
+  for (const c of conditions) {
+    const sql = conditionSql(c);
+    if (sql) parts.push(sql);
+  }
+  if (free) {
+    // Free text falls back to a case-insensitive substring across all columns.
+    const or = columns
+      .map(
+        (c) =>
+          `CAST(${ident(c.name)} AS VARCHAR) ILIKE ${likeLiteral(free)} ESCAPE '\\'`,
+      )
+      .join(" OR ");
+    if (or) parts.push(`(${or})`);
+  }
+  return parts.length ? `WHERE ${parts.join(" AND ")}` : "";
 }
 
 function buildOrder(spec: QuerySpec): string {
@@ -272,6 +353,33 @@ export async function updateCell(
     );
   } finally {
     await conn.close();
+  }
+}
+
+/**
+ * Export the current filtered/sorted view as CSV bytes, generated entirely
+ * inside DuckDB (COPY … TO), so even large result sets never touch JS memory
+ * as rows. Returns the CSV file contents ready to download.
+ */
+export async function exportCsv(
+  spec: QuerySpec,
+  columns: ColumnMeta[],
+): Promise<Uint8Array> {
+  const db = await getDb();
+  const conn = await db.connect();
+  const fname = `export_${Date.now()}.csv`;
+  try {
+    const cols = columns.map((c) => ident(c.name)).join(", ");
+    const where = buildWhere(spec, columns);
+    const order = buildOrder(spec);
+    await conn.query(
+      `COPY (SELECT ${cols} FROM ${ident(spec.table)} ${where} ${order})
+       TO '${fname}' WITH (FORMAT CSV, HEADER)`,
+    );
+    return await db.copyFileToBuffer(fname);
+  } finally {
+    await conn.close();
+    await db.dropFile(fname).catch(() => {});
   }
 }
 

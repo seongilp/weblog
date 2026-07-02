@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Clock, Rows3, X, ArrowDownUp } from "lucide-react";
+import {
+  Search,
+  Clock,
+  Rows3,
+  X,
+  ArrowDownUp,
+  Download,
+  Loader2,
+} from "lucide-react";
 import type { DatasetMeta, QuerySpec, SortSpec } from "@/types";
-import { countMatching } from "@/duckdb/db";
+import { countMatching, exportCsv } from "@/duckdb/db";
 import { useDebounce } from "@/hooks/useDebounce";
 import { VirtualTable } from "./VirtualTable";
 import { Input } from "@/components/ui/input";
@@ -19,6 +27,7 @@ export function Workspace({ dataset }: WorkspaceProps) {
   const [total, setTotal] = useState(dataset.rowCount);
   const [countMs, setCountMs] = useState<number | null>(null);
   const [queryMs, setQueryMs] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const debouncedSearch = useDebounce(search, 180);
 
@@ -45,6 +54,27 @@ export function Workspace({ dataset }: WorkspaceProps) {
 
   const filtered = debouncedSearch.trim().length > 0;
 
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const bytes = await exportCsv(spec, dataset.columns);
+      const blob = new Blob([bytes as BlobPart], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const base = dataset.label.replace(/\.[^.]+$/, "");
+      a.href = url;
+      a.download = `${base}${filtered ? "-filtered" : ""}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      /* ignore */
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="flex h-full flex-col gap-3">
       {/* Toolbar */}
@@ -54,7 +84,7 @@ export function Workspace({ dataset }: WorkspaceProps) {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search across all columns…"
+            placeholder="Search, or filter: quantity=1  price>100  category=Books  path:orders"
             className="pl-9 pr-9 font-mono"
           />
           {search && (
@@ -103,6 +133,22 @@ export function Workspace({ dataset }: WorkspaceProps) {
             {sort.column} {sort.dir}
           </Button>
         )}
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9"
+          onClick={handleExport}
+          disabled={exporting || total === 0}
+          title={`Export ${filtered ? "the filtered" : "all"} rows as CSV`}
+        >
+          {exporting ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Download className="h-3.5 w-3.5" />
+          )}
+          Export{filtered ? ` ${formatCount(total)}` : ""}
+        </Button>
       </div>
 
       {/* Table */}
