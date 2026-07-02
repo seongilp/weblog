@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import type { ColumnMeta, QuerySpec, SortSpec } from "@/types";
 import { useWindowedRows } from "@/hooks/useWindowedRows";
 import { updateCell, clearCells } from "@/duckdb/db";
+import { useToast } from "@/components/ui/toast";
 import {
   alignClass,
   cellText,
@@ -47,6 +48,7 @@ export function VirtualTable({
   const [editing, setEditing] = useState<{ r: number; c: number } | null>(null);
   const dragging = useRef(false);
   const wasEditing = useRef(false);
+  const { toast } = useToast();
 
   // When an edit ends, return focus to the grid so arrow keys work again.
   useEffect(() => {
@@ -167,13 +169,16 @@ export function VirtualTable({
         try {
           await updateCell(spec.table, rowId, columns[c], value);
           invalidate(r);
-        } catch {
-          /* keep the old value on failure */
+        } catch (e) {
+          toast(
+            `Edit failed: ${e instanceof Error ? e.message : String(e)}`,
+            "error",
+          );
         }
       }
       if (moveDown) moveFocus(1, 0, false);
     },
-    [editing, getRow, spec.table, columns, invalidate, moveFocus],
+    [editing, getRow, spec.table, columns, invalidate, moveFocus, toast],
   );
 
   const clearRange = useCallback(async () => {
@@ -188,10 +193,13 @@ export function VirtualTable({
         range.c1,
       );
       invalidateRange(range.r0, range.r1);
-    } catch {
-      /* ignore — values stay as they were */
+    } catch (e) {
+      toast(
+        `Delete failed: ${e instanceof Error ? e.message : String(e)}`,
+        "error",
+      );
     }
-  }, [range, spec, columns, invalidateRange]);
+  }, [range, spec, columns, invalidateRange, toast]);
 
   const copySelection = useCallback(async () => {
     if (!range) return;
@@ -212,10 +220,13 @@ export function VirtualTable({
     }
     try {
       await navigator.clipboard.writeText(lines.join("\n"));
+      const cells =
+        (range.r1 - range.r0 + 1) * (range.c1 - range.c0 + 1);
+      toast(`Copied ${cells.toLocaleString()} cell(s)`, "success");
     } catch {
-      /* clipboard may be blocked; ignore */
+      toast("Clipboard blocked by the browser", "error");
     }
-  }, [range, getRow, columns]);
+  }, [range, getRow, columns, toast]);
 
   function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
     if (editing) return; // input handles its own keys
@@ -418,7 +429,29 @@ export function VirtualTable({
           </div>
         )}
       </div>
+
+      {/* Keyboard hint — appears once a cell is focused. */}
+      {focus && (
+        <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-0.5 border-t border-border/60 px-3 py-1 text-[10px] text-muted-foreground/70">
+          <Hint keys="↑ ↓ ← →" label="move" />
+          <Hint keys="Shift+arrows / drag" label="select range" />
+          <Hint keys="Enter" label="edit" />
+          <Hint keys="Del" label="clear" />
+          <Hint keys="⌘C" label="copy" />
+        </div>
+      )}
     </div>
+  );
+}
+
+function Hint({ keys, label }: { keys: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <kbd className="rounded border border-border/70 bg-secondary/40 px-1 font-mono text-[9px] text-foreground/80">
+        {keys}
+      </kbd>
+      <span>{label}</span>
+    </span>
   );
 }
 

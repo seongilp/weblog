@@ -5,7 +5,6 @@ import {
   Terminal,
   Plus,
   Loader2,
-  FileWarning,
   FolderOpen,
   Zap,
   UploadCloud,
@@ -13,6 +12,7 @@ import {
   Command as CommandIcon,
 } from "lucide-react";
 import { useIngest } from "@/hooks/useIngest";
+import { useToast } from "@/components/ui/toast";
 import { useGlobalDrop } from "@/hooks/useGlobalDrop";
 import { Landing } from "@/features/landing/Landing";
 import { Workspace } from "@/features/table/Workspace";
@@ -37,6 +37,12 @@ export default function App() {
 
   const busy = status === "busy";
   const isDragging = useGlobalDrop(ingest.loadFile, !busy);
+  const { toast } = useToast();
+
+  // Surface ingest failures as a toast (the previous dataset stays visible).
+  useEffect(() => {
+    if (error) toast(error, "error");
+  }, [error, toast]);
 
   // Global Cmd/Ctrl+K opens the command palette.
   useEffect(() => {
@@ -126,7 +132,7 @@ export default function App() {
         }}
       />
 
-      {status !== "ready" || !dataset ? (
+      {!dataset ? (
         <div className="relative min-h-full">
           <Landing
             onLoadSample={() => ingest.loadSample(SAMPLE_SIZE)}
@@ -134,7 +140,6 @@ export default function App() {
             onFile={ingest.loadFile}
             busy={busy}
           />
-          {status === "error" && error && <ErrorToast error={error} />}
         </div>
       ) : (
         <Ready
@@ -258,18 +263,6 @@ function Ready({
           />
         </TabsContent>
       </Tabs>
-    </div>
-  );
-}
-
-function ErrorToast({ error }: { error: string }) {
-  return (
-    <div className="fixed bottom-6 left-1/2 z-50 flex max-w-lg -translate-x-1/2 items-start gap-2 rounded-lg border border-destructive/50 bg-card px-4 py-3 text-sm text-destructive-foreground shadow-xl">
-      <FileWarning className="mt-0.5 h-4 w-4 shrink-0" />
-      <div>
-        <p className="font-medium">Could not load that file</p>
-        <p className="mt-0.5 font-mono text-xs text-muted-foreground">{error}</p>
-      </div>
     </div>
   );
 }

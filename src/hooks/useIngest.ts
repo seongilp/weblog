@@ -31,12 +31,13 @@ export function useIngest() {
   }, []);
 
   const loadFile = useCallback(async (file: File) => {
-    setState({
+    // Keep the current dataset visible while the new one loads.
+    setState((s) => ({
+      ...s,
       status: "busy",
       progress: { phase: "Starting" },
       error: null,
-      dataset: null,
-    });
+    }));
     try {
       const parsed = await parseFile(file, {
         onProgress: (phase, ratio) =>
@@ -54,22 +55,23 @@ export function useIngest() {
       });
       setState({ status: "ready", progress: null, error: null, dataset });
     } catch (err) {
-      setState({
-        status: "error",
+      // On failure, keep the previous dataset if there was one.
+      setState((s) => ({
+        ...s,
+        status: s.dataset ? "ready" : "error",
         progress: null,
         error: err instanceof Error ? err.message : String(err),
-        dataset: null,
-      });
+      }));
     }
   }, []);
 
   const loadSample = useCallback(async (count: number) => {
-    setState({
+    setState((s) => ({
+      ...s,
       status: "busy",
       progress: { phase: `Generating ${count.toLocaleString()} log lines` },
       error: null,
-      dataset: null,
-    });
+    }));
     try {
       const buffer = await generateSample(count, (ratio) =>
         setState((s) => ({
@@ -86,12 +88,12 @@ export function useIngest() {
       });
       setState({ status: "ready", progress: null, error: null, dataset });
     } catch (err) {
-      setState({
-        status: "error",
+      setState((s) => ({
+        ...s,
+        status: s.dataset ? "ready" : "error",
         progress: null,
         error: err instanceof Error ? err.message : String(err),
-        dataset: null,
-      });
+      }));
     }
   }, []);
 

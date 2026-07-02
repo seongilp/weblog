@@ -19,5 +19,8 @@ export default defineConfig({
   optimizeDeps: {
     // duckdb-wasm ships its own workers; let Vite leave them alone.
     exclude: ["@duckdb/duckdb-wasm"],
+    // Pre-bundle xlsx up front so the dev server doesn't re-optimize mid-session
+    // (which was intermittently killing the dev server on first upload).
+    include: ["xlsx"],
   },
 });

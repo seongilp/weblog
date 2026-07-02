@@ -7,15 +7,27 @@ import {
   ArrowDownUp,
   Download,
   Loader2,
+  ChevronDown,
+  FileText,
+  FileSpreadsheet,
 } from "lucide-react";
 import type { DatasetMeta, QuerySpec, SortSpec } from "@/types";
 import { countMatching, exportCsv } from "@/duckdb/db";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useToast } from "@/components/ui/toast";
 import { VirtualTable } from "./VirtualTable";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { formatCount, formatDuration } from "@/lib/utils";
+
+const XLSX_ROW_LIMIT = 100_000;
 
 interface WorkspaceProps {
   dataset: DatasetMeta;
@@ -53,23 +65,59 @@ export function Workspace({ dataset }: WorkspaceProps) {
   }, [spec, dataset.columns]);
 
   const filtered = debouncedSearch.trim().length > 0;
+  const { toast } = useToast();
 
-  async function handleExport() {
+  function download(bytes: Uint8Array, ext: string, mime: string) {
+    const blob = new Blob([bytes as BlobPart], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const base = dataset.label.replace(/\.[^.]+$/, "");
+    a.href = url;
+    a.download = `${base}${filtered ? "-filtered" : ""}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleExport(format: "csv" | "xlsx") {
+    if (format === "xlsx" && total > XLSX_ROW_LIMIT) {
+      toast(
+        `Too many rows for XLSX (${formatCount(total)} > ${formatCount(
+          XLSX_ROW_LIMIT,
+        )}). Export as CSV instead.`,
+        "error",
+      );
+      return;
+    }
     setExporting(true);
     try {
-      const bytes = await exportCsv(spec, dataset.columns);
-      const blob = new Blob([bytes as BlobPart], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      const base = dataset.label.replace(/\.[^.]+$/, "");
-      a.href = url;
-      a.download = `${base}${filtered ? "-filtered" : ""}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch {
-      /* ignore */
+      const csv = await exportCsv(spec, dataset.columns);
+      if (format === "csv") {
+        download(csv, "csv", "text/csv");
+      } else {
+        // Convert the CSV DuckDB produced into a real .xlsx via SheetJS.
+        const XLSX = await import("xlsx");
+        const wb = XLSX.read(new TextDecoder().decode(csv), { type: "string" });
+        const out = XLSX.write(wb, {
+          type: "array",
+          bookType: "xlsx",
+        }) as ArrayBuffer;
+        download(
+          new Uint8Array(out),
+          "xlsx",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        );
+      }
+      toast(
+        `Exported ${formatCount(total)} rows as ${format.toUpperCase()}`,
+        "success",
+      );
+    } catch (e) {
+      toast(
+        `Export failed: ${e instanceof Error ? e.message : String(e)}`,
+        "error",
+      );
     } finally {
       setExporting(false);
     }
@@ -134,21 +182,34 @@ export function Workspace({ dataset }: WorkspaceProps) {
           </Button>
         )}
 
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-9"
-          onClick={handleExport}
-          disabled={exporting || total === 0}
-          title={`Export ${filtered ? "the filtered" : "all"} rows as CSV`}
-        >
-          {exporting ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Download className="h-3.5 w-3.5" />
-          )}
-          Export{filtered ? ` ${formatCount(total)}` : ""}
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9"
+              disabled={exporting || total === 0}
+              title={`Export ${filtered ? "the filtered" : "all"} rows`}
+            >
+              {exporting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+              Export{filtered ? ` ${formatCount(total)}` : ""}
+              <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => handleExport("csv")}>
+              <FileText className="h-4 w-4 text-muted-foreground" /> CSV
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => handleExport("xlsx")}>
+              <FileSpreadsheet className="h-4 w-4 text-muted-foreground" /> Excel
+              (XLSX)
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Table */}
