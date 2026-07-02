@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { FileDropzone } from "@/features/ingest/FileDropzone";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 
 type Lang = "ko" | "en";
 
@@ -26,17 +25,10 @@ interface LandingProps {
 
 const COPY = {
   ko: {
-    tag: "서버리스 · 100% 클라이언트",
-    title1: "로그 100만 줄,",
-    title2: "밀리초 안에 정렬·검색.",
     lead: (
       <>
-        <span className="font-mono text-foreground">weblog</span> 는{" "}
-        <strong className="font-semibold text-foreground">
-          로그 파일이든 엑셀(XLSX)이든 CSV든
-        </strong>{" "}
-        브라우저 안의 DuckDB로 불러와 즉시 검색, 컬럼 정렬, SQL REPL 로 잘라보는
-        정적 페이지입니다.
+        로그 · CSV · 엑셀을 브라우저 안 DuckDB-Wasm 으로 — 서버도, 업로드도
+        없이.
       </>
     ),
     formatsHeading: "로그 · 엑셀 · CSV — 무엇이든 끌어다 놓으면 됩니다",
@@ -78,18 +70,8 @@ const COPY = {
     dropMain: "파일을 끌어다 놓거나 클릭해서 선택",
   },
   en: {
-    tag: "Serverless · 100% client-side",
-    title1: "A million log lines.",
-    title2: "Sorted & searched in milliseconds.",
     lead: (
-      <>
-        <span className="font-mono text-foreground">weblog</span> loads{" "}
-        <strong className="font-semibold text-foreground">
-          log files, Excel (XLSX) and CSV alike
-        </strong>{" "}
-        into an in-browser DuckDB, then lets you slice them with instant search,
-        sortable columns, and a SQL REPL.
-      </>
+      <>Logs · CSV · Excel in an in-browser DuckDB-Wasm — no server, no upload.</>
     ),
     formatsHeading: "Logs · Excel · CSV — drop in anything tabular",
     formats: [
@@ -161,19 +143,15 @@ export function Landing({
         ))}
       </div>
 
-      <Badge variant="outline" className="mb-6 gap-1.5">
-        <Zap className="h-3.5 w-3.5 text-primary" />
-        {t.tag}
-      </Badge>
-
-      <h1 className="text-center text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
-        {t.title1}
-        <br />
+      <h1 className="font-mono text-3xl font-semibold tracking-tight sm:text-4xl">
+        <span className="text-muted-foreground">wasm</span>
+        <span className="mx-2 text-muted-foreground/50">×</span>
         <span className="bg-gradient-to-r from-sky-300 via-blue-400 to-blue-500 bg-clip-text text-transparent">
-          {t.title2}
+          duckdb
         </span>
+        <span className="ml-2 text-muted-foreground">demo</span>
       </h1>
-      <p className="mt-5 max-w-2xl text-center text-base text-muted-foreground">
+      <p className="mt-4 max-w-xl text-center text-sm text-muted-foreground">
         {t.lead}
       </p>
 
