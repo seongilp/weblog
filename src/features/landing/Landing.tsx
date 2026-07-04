@@ -144,12 +144,10 @@ export function Landing({
       </div>
 
       <h1 className="font-mono text-3xl font-semibold tracking-tight sm:text-4xl">
-        <span className="text-muted-foreground">wasm</span>
-        <span className="mx-2 text-muted-foreground/50">×</span>
-        <span className="bg-gradient-to-r from-sky-300 via-blue-400 to-blue-500 bg-clip-text text-transparent">
-          duckdb
+        <span className="text-foreground">weblog</span>
+        <span className="ml-2.5 bg-gradient-to-r from-sky-300 via-blue-400 to-blue-500 bg-clip-text text-transparent">
+          analytics
         </span>
-        <span className="ml-2 text-muted-foreground">demo</span>
       </h1>
       <p className="mt-4 max-w-xl text-center text-sm text-muted-foreground">
         {t.lead}
